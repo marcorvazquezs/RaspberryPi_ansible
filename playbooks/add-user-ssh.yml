@@ -1,0 +1,56 @@
+---
+- hosts: raspberrypi
+  gather_facts: yes
+  become: true 
+  become_method: sudo 
+
+  vars:
+    ansible_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          63333564373561636433383331616264666362666363326362646532313561303231396461323063
+          3233653461623663383033373361373531613636366336660a396235623034666135353161383665
+          32663732366534373061366362306464346365323838653333306362646434336262353833313530
+          6265353232393065300a313833333139646235633938316333623837383865393931323139633565
+          32303262366631376364306463616134306661306563383431643432636662663236
+
+  tasks: 
+    - name: Add a new user named Ansible 
+      user: 
+        name: ansible 
+        shell: /bin/bash
+        password: "{{ ansible_password }}"
+
+    - name: Add ansible user to the sudoers
+      copy: 
+        dest: "/etc/sudoers.d/ansible"
+        content: "ansible ALL=(ALL) NOPASSWD: ALL"
+
+    - name: Deploy SSH Key 
+      authorized_key: 
+        user: ansible 
+        key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
+        state: present 
+
+    - name: Disable Password Authentication 
+      lineinfile: 
+        dest: /etc/ssh/sshd_config 
+        regexp: '^PasswordAuthentication'
+        line: "PasswordAuthentication no"
+        state: present
+        backup: yes 
+
+    - name: Disable root login 
+      lineinfile: 
+        dest: /etc/ssh/sshd_config 
+        regexp: '^PermitRootLogin'
+        line: "PermitRootLogin no"
+        state: present 
+        backup: yes 
+      notify: 
+        - restart ssh 
+
+  handlers: 
+    - name: restart ssh 
+      service: 
+        name: sshd 
+        state: restarted 
